@@ -1,0 +1,114 @@
+✅ Versi 1: SQL Script Interaktif – Backup Semua Database (Manual di SSMS)
+🔧 Disempurnakan
+DECLARE @name NVARCHAR(200) -- Database name
+DECLARE @path NVARCHAR(500) = N'C:\Backup\' -- Folder tujuan
+DECLARE @fileName NVARCHAR(500)
+DECLARE @sql NVARCHAR(MAX)
+
+DECLARE db_cursor CURSOR FOR
+SELECT name 
+FROM sys.databases 
+WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb');  -- Skip system databases
+
+OPEN db_cursor  
+FETCH NEXT FROM db_cursor INTO @name  
+
+WHILE @@FETCH_STATUS = 0  
+BEGIN  
+    SET @fileName = @path + @name + '_FULL_' + 
+                    FORMAT(GETDATE(), 'yyyyMMdd_HHmmss') + '.bak';
+
+    SET @sql = N'
+        BACKUP DATABASE [' + @name + N']
+        TO DISK = N''' + @fileName + N'''
+        WITH INIT, FORMAT, 
+        NAME = N''Full Backup of ' + @name + N''', 
+        STATS = 10;
+    ';
+
+    PRINT 'Backing up database: ' + @name
+    EXEC(@sql)
+
+    FETCH NEXT FROM db_cursor INTO @name  
+END  
+
+CLOSE db_cursor  
+DEALLOCATE db_cursor
+
+✅ Keunggulan:
+
+Hasil file backup unik per database dan timestamp.
+
+Bagus untuk dijalankan manual via SSMS atau dijadwalkan via SQL Agent Job.
+
+✅ Versi 2: Otomatis via Command Line + SQLCMD
+🔧 Script .sql (backup_all_databases.sql)
+
+Sedikit perbaikan agar tetap bisa jalan dan punya backup timestamp:
+
+DECLARE @name NVARCHAR(200), @sql NVARCHAR(MAX), @path NVARCHAR(500)
+SET @path = 'C:\Backup\'
+
+DECLARE db CURSOR FOR
+SELECT name FROM sys.databases WHERE name NOT IN ('master','model','msdb','tempdb');
+
+OPEN db
+FETCH NEXT FROM db INTO @name
+
+WHILE @@FETCH_STATUS = 0
+BEGIN
+    DECLARE @fileName NVARCHAR(500)
+    SET @fileName = @path + @name + '_FULL_' + 
+                    CONVERT(VARCHAR(20), GETDATE(), 112) + '_' + 
+                    REPLACE(CONVERT(VARCHAR(8), GETDATE(), 108), ':', '') + '.bak'
+
+    SET @sql = '
+        BACKUP DATABASE [' + @name + ']
+        TO DISK = N''' + @fileName + '''
+        WITH INIT, FORMAT, NAME = ''Full backup of ' + @name + ''', STATS = 10;'
+    EXEC (@sql)
+
+    FETCH NEXT FROM db INTO @name
+END
+
+CLOSE db
+DEALLOCATE db
+
+🔧 .bat file (backup_all_databases.bat)
+@echo off
+:: Ganti dengan nama server kamu (atau . untuk lokal)
+SET SERVER=YOUR_SERVER_NAME
+
+:: Jalankan SQLCMD untuk menjalankan script backup
+sqlcmd -S %SERVER% -E -i "C:\Scripts\backup_all_databases.sql"
+
+:: Optional: log hasil
+echo Backup selesai pada %date% %time% >> C:\Backup\backup_log.txt
+
+⚠️ Tips Tambahan
+
+Pastikan folder C:\Backup\ ada dan bisa diakses oleh SQL Server service account.
+
+Jangan lupa hak akses NTFS pada folder backup (pastikan SQL Server punya Write).
+
+Kalau kamu pakai SQL Server Express (yang tidak punya SQL Agent), maka .bat + Task Scheduler adalah solusi terbaik.
+
+Gunakan nama server yang benar:
+
+Lokal: . atau localhost
+
+Named instance: .\SQLEXPRESS (atau sesuai)
+
+Remote: 192.168.1.10,1433 (IP dan port jika perlu)
+
+Kalau kamu butuh:
+
+Script restore otomatis semua backup yang dibuat
+
+Penambahan kompresi backup
+
+Pengiriman notifikasi email/log saat backup berhasil/gagal
+
+Menambahkan folder rotasi (misal: hapus backup lebih dari 7 hari)
+
+...saya bisa bantu buatkan juga. Mau lanjut ke bagian restore atau rotasi otomatis?
